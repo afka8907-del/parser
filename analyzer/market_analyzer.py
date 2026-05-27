@@ -11,7 +11,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import AsyncSessionLocal, Listing, MarketAnalysis
+from database import AsyncSessionLocal, Listing, ListingStatus, MarketAnalysis
 from utils.helpers import calculate_profit_margin
 
 
@@ -59,30 +59,40 @@ class MarketAnalyzer:
     
     # Demand scores by model (higher = faster resale)
     DEMAND_SCORES = {
-        "iPhone 15 Pro Max": 95,
-        "iPhone 15 Pro": 90,
-        "iPhone 15 Plus": 75,
-        "iPhone 15": 80,
-        "iPhone 14 Pro Max": 90,
-        "iPhone 14 Pro": 85,
-        "iPhone 14 Plus": 70,
-        "iPhone 14": 75,
-        "iPhone 13 Pro Max": 80,
-        "iPhone 13 Pro": 75,
-        "iPhone 13 mini": 50,
-        "iPhone 13": 70,
-        "iPhone 12 Pro Max": 70,
-        "iPhone 12 Pro": 65,
-        "iPhone 12 mini": 45,
-        "iPhone 12": 60,
-        "iPhone 11 Pro Max": 60,
-        "iPhone 11 Pro": 55,
-        "iPhone 11": 50,
-        "iPhone SE": 40,
-        "iPhone XR": 45,
-        "iPhone XS Max": 40,
-        "iPhone XS": 35,
-        "iPhone X": 30,
+        "iPhone 17 Pro Max": 98,
+        "iPhone 17 Pro": 97,
+        "iPhone 17e": 80,
+        "iPhone 17": 90,
+        "iPhone 16 Pro Max": 97,
+        "iPhone 16 Pro": 95,
+        "iPhone 16 Plus": 80,
+        "iPhone 16e": 75,
+        "iPhone 16": 85,
+        "iPhone 15 Pro Max": 92,
+        "iPhone 15 Pro": 88,
+        "iPhone 15 Plus": 72,
+        "iPhone 15": 78,
+        "iPhone 14 Pro Max": 85,
+        "iPhone 14 Pro": 80,
+        "iPhone 14 Plus": 65,
+        "iPhone 14": 70,
+        "iPhone 13 Pro Max": 75,
+        "iPhone 13 Pro": 70,
+        "iPhone 13 mini": 45,
+        "iPhone 13": 65,
+        "iPhone 12 Pro Max": 60,
+        "iPhone 12 Pro": 55,
+        "iPhone 12 mini": 35,
+        "iPhone 12": 50,
+        "iPhone 11 Pro Max": 45,
+        "iPhone 11 Pro": 40,
+        "iPhone 11": 35,
+        "iPhone SE": 30,
+        "iPhone XR": 30,
+        "iPhone XS Max": 25,
+        "iPhone XS": 20,
+        "iPhone X": 15,
+        "iPhone Air": 85,
     }
     
     # Repair cost estimates in MDL
@@ -113,7 +123,7 @@ class MarketAnalyzer:
                     func.max(Listing.price).label("max_price"),
                     func.count(Listing.id).label("count"),
                 )
-                .where(Listing.status == "active")
+                .where(Listing.status == ListingStatus.ACTIVE)
                 .group_by(Listing.model, Listing.storage_gb)
                 .order_by(Listing.model, Listing.storage_gb)
             )
@@ -127,7 +137,7 @@ class MarketAnalyzer:
                     select(Listing.price)
                     .where(Listing.model == model)
                     .where(Listing.storage_gb == storage)
-                    .where(Listing.status == "active")
+                    .where(Listing.status == ListingStatus.ACTIVE)
                 )
                 prices = [float(p[0]) for p in prices_result.all()]
                 
@@ -213,7 +223,7 @@ class MarketAnalyzer:
             
             # Get all active listings
             result = await session.execute(
-                select(Listing).where(Listing.status == "active")
+                select(Listing).where(Listing.status == ListingStatus.ACTIVE)
             )
             listings = result.scalars().all()
             
@@ -325,11 +335,13 @@ class MarketAnalyzer:
         profit_score = min(100, max(0, int(profit_margin * 2)))  # Scale: 50% margin = 100 score
         
         # Calculate risk score (0-100, lower is better)
+        from sqlalchemy import inspect as sa_inspect
+        seller_loaded = "seller" in sa_inspect(listing).dict
         risk_factors = [
             listing.is_suspicious,
             listing.icloud_locked,
             listing.is_fake,
-            listing.seller.is_blacklisted if listing.seller else False,
+            listing.seller.is_blacklisted if seller_loaded and listing.seller else False,
         ]
         risk_score = sum([20 for f in risk_factors if f]) + (30 if listing.replaced_parts else 0)
         risk_score = min(100, risk_score)
@@ -409,7 +421,7 @@ class MarketAnalyzer:
             # Get sold/deleted count
             sold_result = await session.execute(
                 select(func.count(Listing.id))
-                .where(Listing.status == "sold")
+                .where(Listing.status == ListingStatus.SOLD)
                 .where(Listing.last_checked >= since)
             )
             sold_count = sold_result.scalar()
@@ -420,7 +432,7 @@ class MarketAnalyzer:
                     Listing.model,
                     func.avg(Listing.price).label("avg_price")
                 )
-                .where(Listing.status == "active")
+                .where(Listing.status == ListingStatus.ACTIVE)
                 .group_by(Listing.model)
             )
             current_prices = {row[0]: float(row[1]) for row in price_result.all()}
