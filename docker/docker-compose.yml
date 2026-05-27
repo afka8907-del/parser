@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Main application
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: iphone-reseller-intel
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/iphone_market
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    command: python main.py all
+
+  # Database
+  db:
+    image: postgres:15-alpine
+    container_name: iphone-reseller-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=iphone_market
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: iphone-reseller-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+  # Optional: Run scheduler separately
+  scheduler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: iphone-reseller-scheduler
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/iphone_market
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    depends_on:
+      - db
+      - redis
+    command: python main.py scheduler
+    profiles:
+      - scheduler
+
+volumes:
+  postgres_data:
+  redis_data:

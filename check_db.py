@@ -1,0 +1,32 @@
+import sqlite3
+conn = sqlite3.connect('data/iphone_market.db')
+cursor = conn.cursor()
+cursor.execute("SELECT count(*) FROM listings")
+print("listings:", cursor.fetchone()[0])
+cursor.execute("SELECT count(*) FROM listings WHERE status = 'active'")
+print("active:", cursor.fetchone()[0])
+cursor.execute("SELECT count(*) FROM listings WHERE estimated_profit IS NOT NULL AND estimated_profit > 0")
+print("with profit:", cursor.fetchone()[0])
+cursor.execute("SELECT count(*) FROM market_analysis")
+print("market_analysis:", cursor.fetchone()[0])
+cursor.execute("SELECT count(*) FROM listings WHERE status = 'active' AND estimated_profit IS NOT NULL AND estimated_profit > 0")
+print("active with profit:", cursor.fetchone()[0])
+cursor.execute("SELECT status, count(*) FROM listings GROUP BY status")
+print("status breakdown:")
+rows = cursor.fetchall()
+if rows:
+    for row in rows:
+        print("  ", row[0], ":", row[1])
+else:
+    print("  (no rows)")
+cursor.execute("SELECT count(*) FROM listings WHERE status IS NULL")
+print("null status:", cursor.fetchone()[0])
+cursor.execute("SELECT id, model, status, price, storage_gb, estimated_profit FROM listings LIMIT 10")
+print("sample listings:")
+for row in cursor.fetchall():
+    print("  ", row)
+cursor.execute("SELECT count(*) FROM listings WHERE price < 1000")
+print("listings with price < 1000:", cursor.fetchone()[0])
+cursor.execute("SELECT count(*) FROM listings WHERE price >= 1000")
+print("listings with price >= 1000:", cursor.fetchone()[0])
+conn.close()
