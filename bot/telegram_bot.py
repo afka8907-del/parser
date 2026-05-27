@@ -20,7 +20,7 @@ from alerts.alerts import AlertManager
 from analyzer.deal_detector import DealDetector
 from analyzer.market_analyzer import MarketAnalyzer
 from config import settings
-from database import AsyncSessionLocal, Listing, Watchlist
+from database import AsyncSessionLocal, Listing, ListingStatus, Watchlist
 from utils.helpers import format_currency
 
 
@@ -359,7 +359,7 @@ Sunt asistentul tău inteligent pentru arbitrage și profit pe piața iPhone din
                 
                 result = await session.execute(
                     select(Listing)
-                    .where(Listing.status == "active")
+                    .where(Listing.status == ListingStatus.ACTIVE)
                     .where(
                         or_(
                             Listing.title.ilike(f"%{search_term}%"),
@@ -403,7 +403,7 @@ Sunt asistentul tău inteligent pentru arbitrage și profit pe piața iPhone din
                 
                 # Total stats
                 total_result = await session.execute(
-                    select(func.count(Listing.id)).where(Listing.status == "active")
+                    select(func.count(Listing.id)).where(Listing.status == ListingStatus.ACTIVE)
                 )
                 total_active = total_result.scalar()
                 
@@ -414,7 +414,7 @@ Sunt asistentul tău inteligent pentru arbitrage și profit pe piața iPhone din
                 # Model distribution
                 model_result = await session.execute(
                     select(Listing.model, func.count(Listing.id).label("count"))
-                    .where(Listing.status == "active")
+                    .where(Listing.status == ListingStatus.ACTIVE)
                     .group_by(Listing.model)
                     .order_by(func.count(Listing.id).desc())
                     .limit(5)
@@ -423,7 +423,7 @@ Sunt asistentul tău inteligent pentru arbitrage și profit pe piața iPhone din
                 
                 # Average price
                 price_result = await session.execute(
-                    select(func.avg(Listing.price)).where(Listing.status == "active")
+                    select(func.avg(Listing.price)).where(Listing.status == ListingStatus.ACTIVE)
                 )
                 avg_price = price_result.scalar() or 0
                 

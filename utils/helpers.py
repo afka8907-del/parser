@@ -72,6 +72,12 @@ def parse_price(price_text: str) -> Tuple[float, str]:
             else:
                 # Likely thousands
                 number_str = number_str.replace(",", "")
+        elif "." in number_str:
+            # Could be thousands separator (European style) or decimal
+            parts = number_str.split(".")
+            if len(parts) == 2 and len(parts[-1]) == 3:
+                # e.g. "15.500" -> 15500 (thousands separator)
+                number_str = number_str.replace(".", "")
         
         try:
             price = float(number_str)

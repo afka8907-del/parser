@@ -11,7 +11,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import AsyncSessionLocal, Listing, MarketAnalysis
+from database import AsyncSessionLocal, Listing, ListingStatus, MarketAnalysis
 from utils.helpers import calculate_profit_margin
 
 
@@ -113,7 +113,7 @@ class MarketAnalyzer:
                     func.max(Listing.price).label("max_price"),
                     func.count(Listing.id).label("count"),
                 )
-                .where(Listing.status == "active")
+                .where(Listing.status == ListingStatus.ACTIVE)
                 .group_by(Listing.model, Listing.storage_gb)
                 .order_by(Listing.model, Listing.storage_gb)
             )
@@ -127,7 +127,7 @@ class MarketAnalyzer:
                     select(Listing.price)
                     .where(Listing.model == model)
                     .where(Listing.storage_gb == storage)
-                    .where(Listing.status == "active")
+                    .where(Listing.status == ListingStatus.ACTIVE)
                 )
                 prices = [float(p[0]) for p in prices_result.all()]
                 
@@ -213,7 +213,7 @@ class MarketAnalyzer:
             
             # Get all active listings
             result = await session.execute(
-                select(Listing).where(Listing.status == "active")
+                select(Listing).where(Listing.status == ListingStatus.ACTIVE)
             )
             listings = result.scalars().all()
             
@@ -325,11 +325,13 @@ class MarketAnalyzer:
         profit_score = min(100, max(0, int(profit_margin * 2)))  # Scale: 50% margin = 100 score
         
         # Calculate risk score (0-100, lower is better)
+        from sqlalchemy import inspect as sa_inspect
+        seller_loaded = "seller" in sa_inspect(listing).dict
         risk_factors = [
             listing.is_suspicious,
             listing.icloud_locked,
             listing.is_fake,
-            listing.seller.is_blacklisted if listing.seller else False,
+            listing.seller.is_blacklisted if seller_loaded and listing.seller else False,
         ]
         risk_score = sum([20 for f in risk_factors if f]) + (30 if listing.replaced_parts else 0)
         risk_score = min(100, risk_score)
@@ -409,7 +411,7 @@ class MarketAnalyzer:
             # Get sold/deleted count
             sold_result = await session.execute(
                 select(func.count(Listing.id))
-                .where(Listing.status == "sold")
+                .where(Listing.status == ListingStatus.SOLD)
                 .where(Listing.last_checked >= since)
             )
             sold_count = sold_result.scalar()
@@ -420,7 +422,7 @@ class MarketAnalyzer:
                     Listing.model,
                     func.avg(Listing.price).label("avg_price")
                 )
-                .where(Listing.status == "active")
+                .where(Listing.status == ListingStatus.ACTIVE)
                 .group_by(Listing.model)
             )
             current_prices = {row[0]: float(row[1]) for row in price_result.all()}

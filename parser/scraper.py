@@ -258,8 +258,25 @@ class NinesScraper:
             if not title:
                 continue
 
-            price, currency = parse_price(combined_text)
+            # Extract price from the context text surrounding the link, not the
+            # title itself, to avoid picking up model numbers (e.g. "15" from
+            # "iPhone 15 Pro") as prices.
+            price_candidates = re.findall(
+                r"(\d[\d\s.,]*)\s*(?:lei|mdl|€|eur|\$|usd)",
+                combined_text,
+                re.IGNORECASE,
+            )
+            price = 0.0
+            currency = "MDL"
+            for candidate in price_candidates:
+                p, c = parse_price(candidate + " lei")
+                if p >= 500:
+                    price = p
+                    currency = c
+                    break
             if price <= 0:
+                price, currency = parse_price(combined_text)
+            if price <= 0 or price < 500:
                 continue
 
             model, storage_gb, color = extract_iphone_model(title)

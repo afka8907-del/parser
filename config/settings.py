@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     # Alerts
     min_profit_threshold: int = 1000
     min_profit_percent: int = 10
-    risk_score_threshold: int = 7
+    risk_score_threshold: int = 70
     notify_on_deal: bool = True
     notify_on_price_drop: bool = True
     
