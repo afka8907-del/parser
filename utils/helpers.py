@@ -97,32 +97,42 @@ def extract_iphone_model(text: str) -> Tuple[str, Optional[int], Optional[str]]:
     """
     text_lower = text.lower()
     
-    # iPhone models to detect
+    # iPhone models to detect (order matters – longer/more specific first)
     models = [
+        ("iPhone 17 Pro Max", ["iphone 17 pro max", "17 pro max", "17promax"]),
+        ("iPhone 17 Pro", ["iphone 17 pro", "17 pro", "17pro"]),
+        ("iPhone 17e", ["iphone 17e", "iphone 17 e"]),
+        ("iPhone 17", ["iphone 17"]),
+        ("iPhone 16 Pro Max", ["iphone 16 pro max", "16 pro max", "16promax"]),
+        ("iPhone 16 Pro", ["iphone 16 pro", "16 pro", "16pro"]),
+        ("iPhone 16 Plus", ["iphone 16 plus", "16 plus", "16plus"]),
+        ("iPhone 16e", ["iphone 16e", "iphone 16 e"]),
+        ("iPhone 16", ["iphone 16"]),
         ("iPhone 15 Pro Max", ["iphone 15 pro max", "15 pro max", "15promax"]),
         ("iPhone 15 Pro", ["iphone 15 pro", "15 pro", "15pro"]),
         ("iPhone 15 Plus", ["iphone 15 plus", "15 plus", "15plus"]),
-        ("iPhone 15", ["iphone 15", "15 "]),
+        ("iPhone 15", ["iphone 15"]),
         ("iPhone 14 Pro Max", ["iphone 14 pro max", "14 pro max", "14promax"]),
         ("iPhone 14 Pro", ["iphone 14 pro", "14 pro", "14pro"]),
         ("iPhone 14 Plus", ["iphone 14 plus", "14 plus", "14plus"]),
-        ("iPhone 14", ["iphone 14", "14 "]),
+        ("iPhone 14", ["iphone 14"]),
         ("iPhone 13 Pro Max", ["iphone 13 pro max", "13 pro max", "13promax"]),
         ("iPhone 13 Pro", ["iphone 13 pro", "13 pro", "13pro"]),
         ("iPhone 13 mini", ["iphone 13 mini", "13 mini", "13mini"]),
-        ("iPhone 13", ["iphone 13", "13 "]),
+        ("iPhone 13", ["iphone 13"]),
         ("iPhone 12 Pro Max", ["iphone 12 pro max", "12 pro max", "12promax"]),
         ("iPhone 12 Pro", ["iphone 12 pro", "12 pro", "12pro"]),
         ("iPhone 12 mini", ["iphone 12 mini", "12 mini", "12mini"]),
-        ("iPhone 12", ["iphone 12", "12 "]),
+        ("iPhone 12", ["iphone 12"]),
         ("iPhone 11 Pro Max", ["iphone 11 pro max", "11 pro max", "11promax"]),
         ("iPhone 11 Pro", ["iphone 11 pro", "11 pro", "11pro"]),
-        ("iPhone 11", ["iphone 11", "11 "]),
-        ("iPhone SE", ["iphone se", "se ", "se2", "se3"]),
-        ("iPhone XR", ["iphone xr", " xr"]),
+        ("iPhone 11", ["iphone 11"]),
+        ("iPhone SE", ["iphone se"]),
+        ("iPhone XR", ["iphone xr"]),
         ("iPhone XS Max", ["iphone xs max", "xs max", "xsmax"]),
-        ("iPhone XS", ["iphone xs", " xs"]),
-        ("iPhone X", ["iphone x", " x "]),
+        ("iPhone XS", ["iphone xs"]),
+        ("iPhone X", ["iphone x "]),
+        ("iPhone Air", ["iphone air"]),
     ]
     
     detected_model = "Unknown"

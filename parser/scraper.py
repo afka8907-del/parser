@@ -138,17 +138,20 @@ class NinesScraper:
             # 999.md sometimes loads content a bit slower / differently depending on
             # anti-bot measures. If the selector doesn't appear in time, we still
             # attempt to parse the HTML we got to avoid aborting the whole scrape.
+            # 999.md uses React with CSS-module hashed classes.
+            # The stable part of the listing container class is
+            # "styles_advert__photo__" which is present on every listing card.
+            listing_sel = "[class*='advert__photo__link']"
             try:
-                await self.page.wait_for_selector(".ads-list-photo-item", timeout=6000)
+                await self.page.wait_for_selector(listing_sel, timeout=6000)
             except Exception as e:
                 logger.warning(f"Listings selector not found in time for {url}: {e}")
-                # Try scrolling to trigger client-side rendering / lazy loading.
                 try:
                     for _ in range(2):
                         await self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                         await self.page.wait_for_timeout(800)
                     await self._dismiss_interfering_popups()
-                    await self.page.wait_for_selector(".ads-list-photo-item", timeout=2000)
+                    await self.page.wait_for_selector(listing_sel, timeout=2000)
                 except Exception:
                     pass
             
@@ -214,23 +217,26 @@ class NinesScraper:
         """Parse listings from page HTML."""
         soup = BeautifulSoup(html, "lxml")
         listings = []
-        
-        # Find all listing items
-        items = soup.find_all("li", class_="ads-list-photo-item")
-        
-        for item in items:
+
+        # 999.md renders listing cards inside <a> tags whose class
+        # contains "advert__photo__link".  Each card has child divs
+        # for the title and price.
+        link_elements = soup.find_all(
+            "a", class_=re.compile(r"advert__photo__link")
+        )
+
+        for link_el in link_elements:
             try:
-                listing = self._parse_listing_item(item)
+                listing = self._parse_listing_card(link_el)
                 if listing:
                     listings.append(listing)
             except Exception as e:
-                logger.warning(f"Error parsing listing item: {e}")
+                logger.warning(f"Error parsing listing card: {e}")
                 continue
 
-        # Fallback for updated website markup where legacy classes are missing.
         if not listings:
             listings = self._parse_listings_fallback(soup)
-        
+
         return listings
 
     def _parse_listings_fallback(self, soup: BeautifulSoup) -> List[ScrapedListing]:
@@ -311,75 +317,90 @@ class NinesScraper:
             logger.info(f"Fallback parser extracted {len(listings)} listings")
         return listings
     
-    def _parse_listing_item(self, item) -> Optional[ScrapedListing]:
-        """Parse individual listing item."""
+    def _parse_listing_card(self, link_el) -> Optional[ScrapedListing]:
+        """Parse a single listing card from the redesigned 999.md markup.
+
+        The card is an <a> element wrapping an image, title and price div.
+        """
         try:
-            # Extract link and ID
-            link_elem = item.find("a", class_="js-item-ad")
-            if not link_elem:
+            href = link_el.get("href", "")
+            if not href or "/ro/" not in href:
                 return None
-            
-            href = link_elem.get("href", "")
+
             external_id = self._extract_listing_id(href)
-            listing_url = urljoin(self.BASE_URL, href)
-            
-            # Extract title
-            title_elem = item.find("div", class_="ads-list-photo-item-title")
-            title = title_elem.get_text(strip=True) if title_elem else ""
-            
-            # Extract price
-            price_elem = item.find("span", class_="ads-list-photo-item-price")
-            price_text = price_elem.get_text(strip=True) if price_elem else "0"
+            if not external_id:
+                return None
+
+            listing_url = urljoin(self.BASE_URL, href.split("?")[0])
+
+            # Title lives inside a child whose class contains 'advert__photo__title'
+            title_el = link_el.find(class_=re.compile(r"advert__photo__title"))
+            title = title_el.get_text(" ", strip=True) if title_el else ""
+            if not title:
+                return None
+
+            # Price text inside a child whose class contains 'price__text'
+            price_el = link_el.find(class_=re.compile(r"price__text"))
+            price_text = price_el.get_text(strip=True) if price_el else ""
             price, currency = parse_price(price_text)
-            
-            # Extract image
-            img_elem = item.find("img")
+            if price < 500:
+                return None
+
+            # Image – background-image on a div with class containing 'image'
             images = []
-            if img_elem:
-                img_url = img_elem.get("src") or img_elem.get("data-src")
-                if img_url:
-                    images.append(urljoin(self.BASE_URL, img_url))
-            
-            # Extract location
-            location_elem = item.find("span", class_="ads-list-photo-item-location")
-            location = location_elem.get_text(strip=True) if location_elem else None
-            
-            # Extract posting time
-            time_elem = item.find("span", class_="js-ads-list-photo-item-date")
-            posted_at = self._parse_posting_time(time_elem.get_text(strip=True) if time_elem else None)
-            
-            # Parse iPhone details from title
+            img_div = link_el.find(class_=re.compile(r"image__"), style=True)
+            if img_div:
+                style = img_div.get("style", "")
+                url_match = re.search(r'url\(["\']?([^"\')]+)', style)
+                if url_match:
+                    images.append(url_match.group(1))
+            img_tag = link_el.find("img")
+            if img_tag:
+                src = img_tag.get("src") or img_tag.get("data-src")
+                if src:
+                    images.append(urljoin(self.BASE_URL, src))
+
             model, storage_gb, color = extract_iphone_model(title)
-            
+
             return ScrapedListing(
                 external_id=external_id,
                 title=title,
-                description="",  # Will be filled from detail page
+                description="",
                 model=model or "Unknown",
                 storage_gb=storage_gb,
                 color=color,
-                battery_health=None,  # Will be filled from detail page
-                condition=None,  # Will be filled from detail page
+                battery_health=None,
+                condition=None,
                 price=price,
                 currency=currency,
                 listing_url=listing_url,
                 images=images,
-                location=location,
-                posted_at=posted_at,
-                seller_name=None,  # Will be filled from detail page
-                seller_external_id=None,  # Will be filled from detail page
+                location=None,
+                posted_at=None,
+                seller_name=None,
+                seller_external_id=None,
             )
-            
+
         except Exception as e:
-            logger.warning(f"Error parsing item: {e}")
+            logger.warning(f"Error parsing card: {e}")
             return None
     
     def _extract_listing_id(self, href: str) -> str:
-        """Extract listing ID from URL."""
+        """Extract listing ID from URL.
+
+        999.md URLs look like ``/ro/88618012`` or ``/ro/88618012?clickToken=…``.
+        Older URLs had ``/item/<id>``.
+        """
+        # Strip query string first
+        clean = href.split("?")[0]
+        match = re.search(r"/(\d{5,})", clean)
+        if match:
+            return match.group(1)
+        # Legacy /item/<id> format
         match = re.search(r"/item/(\d+)", href)
         if match:
             return match.group(1)
-        return href.strip("/").split("/")[-1]
+        return clean.strip("/").split("/")[-1]
     
     def _parse_posting_time(self, time_text: Optional[str]) -> Optional[datetime]:
         """Parse posting time from text."""
